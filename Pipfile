@@ -1,0 +1,21 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+trash-cli = "*"
+jupyter = "*"
+jupyter-client = "*"
+jupyter-contrib-nbextensions = "*"
+flake8 = "*"
+autopep8 = "*"
+pylint = "*"
+mypy = "*"
+
+[packages]
+chainer = "==5.0.0"
+numpy = "==1.16.2"
+
+[requires]
+python_version = "3.6.5"
