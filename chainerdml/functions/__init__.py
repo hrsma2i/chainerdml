@@ -1,0 +1,2 @@
+from chainerdml.functions.npair_loss import NpairLoss
+from chainerdml.functions.pairwise_distance import euclidean_pairwise_distances
