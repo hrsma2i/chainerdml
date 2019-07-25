@@ -69,6 +69,11 @@ class NpairLoss:
         Return:
             loss (Variable (1, ))
         """
+
+        if self.l2_normalize:
+            u = F.normalize(u, axis=1)
+            v = F.normalize(v, axis=1)
+
         metrics = self.calc_metric_matrix(u, v)
         loss = self.lossfun(metrics, labels=labels)
 
