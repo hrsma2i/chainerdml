@@ -4,6 +4,8 @@ from chainer import using_config
 
 
 class NpairLoss:
+    _valid_metric_types = ['dot', 'cosine', 'euclidean']
+
     def __init__(
         self,
         model,
@@ -23,8 +25,9 @@ class NpairLoss:
         """
 
         Args:
-            model ([type]): [description]
-            metric_type (str, optional): [description]. Defaults to 'dot'.
+            model (chainer.Chain): A model to which is added this loss.
+            metric_type (str, optional): Defaults to 'dot'.
+                `dot`, `cosine`, or `euclidean`.
             loss_type (str, optional): [description]. Defaults to 'hinge'.
             margin (float, optional): [description]. Defaults to 187.0.
             bidirectional (bool, optional): [description]. Defaults to False.
@@ -37,6 +40,12 @@ class NpairLoss:
             cache (bool, optional): [description]. Defaults to False.
         """
         self.model = model
+        if metric_type not in self._valid_metric_types:
+            raise ValueError(
+                '`metric_type` must be selected from {}.'.format(
+                    ', '.join(self._valid_metric_types)
+                )
+            )
         self.metric_type = metric_type
         self.l2_normalize = metric_type == 'cosine'
         self.l2_reg = l2_reg
