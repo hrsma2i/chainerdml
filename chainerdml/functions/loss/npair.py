@@ -22,6 +22,19 @@ def npair(
         u = F.normalize(u, axis=1)
         v = F.normalize(v, axis=1)
 
+    metrics = _calc_metric_matrix(u, v, metric_type, bidirectional)
+    loss = _calc_loss(metrics, labels, loss_type, bidirectional)
+
+    if not return_apn_norm:
+        return loss
+    else:
+        ap, an, pnu, pnv =\
+            _get_anc_pos_neg(metrics, u, v, metric_type, labels, bidirectional)
+        norm_u, norm_v = _get_norms(u, v)
+        return loss, ap, an, pnu, pnv, norm_u, norm_v
+
+
+def _calc_metric_matrix(u, v, metric_type, bidirectional):
     if metric_type == 'euclidean':
         # distance
         if not bidirectional:
@@ -31,7 +44,10 @@ def npair(
         # similarity
         metrics = F.matmul(u, v, transb=True)
     # metrics: (B_u, B_v)
+    return metrics
 
+
+def _calc_loss(metrics, labels, loss_type, bidirectional):
     if not bidirectional:
         if labels is None:
             raise ValueError('labels is needed when not bidirectional.')
@@ -56,14 +72,10 @@ def npair(
         else:
             raise ValueError('Unknown loss_type {}.'.format(loss_type))
 
-    if not return_apn_norm:
-        return loss
-    else:
-        norm_u, norm_v = _get_norms(u, v)
-        return loss, 
+    return loss
 
 
-def get_anc_pos_neg(metrics, u, v, labels, bidirectional):
+def _get_anc_pos_neg(metrics, u, v, metric_type, labels, bidirectional):
     """
     Returns:
         (dict<xp.array>)
@@ -97,17 +109,17 @@ def get_anc_pos_neg(metrics, u, v, labels, bidirectional):
 
         anc_neg = F.sum(mask * metrics) / (B_u * (B_v - 1))
 
-        metrics_u = self.calc_metric_matrix(u, u)
+        metrics_u = _calc_metric_matrix(u, u)
         mask_u = xp.ones_like(metrics_u)
         mask_u[xp.arange(B_u), xp.arange(B_u)] = 0
         pos_neg_u = F.sum(mask_u * metrics_u) / (B_u * (B_u - 1))
 
-        metrics_v = self.calc_metric_matrix(v, v)
+        metrics_v = _calc_metric_matrix(v, v)
         mask_v = xp.ones_like(metrics_v)
         mask_v[xp.arange(B_v), xp.arange(B_v)] = 0
         pos_neg_v = F.sum(mask_v * metrics_v) / (B_v * (B_v - 1))
 
-        if self.metric_type == 'euclidean':
+        if metric_type == 'euclidean':
             anc_pos = F.sqrt(anc_pos)
             anc_neg = F.sqrt(anc_neg)
             pos_neg_u = F.sqrt(pos_neg_u)
@@ -118,10 +130,7 @@ def get_anc_pos_neg(metrics, u, v, labels, bidirectional):
         pos_neg_u = pos_neg_u.data
         pos_neg_v = pos_neg_v.data
 
-    return dict(anc_pos=anc_pos,
-                anc_neg=anc_neg,
-                pos_neg_u=pos_neg_u,
-                pos_neg_v=pos_neg_v)
+    return anc_pos, anc_neg, pos_neg_u, pos_neg_v
 
 
 def _get_norms(u, v):
