@@ -82,6 +82,16 @@ class NpairLoss:
             v = F.normalize(v, axis=1)
 
         metrics = self.calc_metric_matrix(u, v)
+
+        if self.bidirectional:
+            B_u, B_v = metrics.shape
+            if B_u == B_v:
+                raise ValueError(
+                    'B_u and B_v must be the same when bidirectional.')
+            xp = cuda.get_array_module(metrics)
+            labels = xp.arange(B_u)
+            # labels: (B_u, )
+
         loss = self.lossfun(metrics, labels=labels)
 
         # for report
@@ -114,7 +124,7 @@ class NpairLoss:
 
         return metrics
 
-    def lossfun(self, metrics, labels=None):
+    def lossfun(self, metrics, labels):
         """
         Args:
             metrics (chainer.Variable: (b_u, b_v))
@@ -128,15 +138,6 @@ class NpairLoss:
         metric_type = self.metric_type
         loss_type = self.loss_type
         margin = self.margin
-
-        if self.bidirectional:
-            B_u, B_v = metrics.shape
-            if B_u == B_v:
-                raise ValueError(
-                    'B_u and B_v must be the same when bidirectional.')
-            xp = cuda.get_array_module(metrics)
-            labels = xp.arange(B_u)
-            # labels: (B_u, )
 
         # anchor is u.
         if loss_type == 'hinge':
