@@ -1,8 +1,8 @@
 import chainer.functions as F
 from chainer import cuda
 from chainer import using_config
-from chainerdml.functions import euclidean_pairwise_distances
-from chainerdml.functions import npair_hinge
+from chainerdml.functions.loss.npair_hinge import npair_hinge
+from chainerdml.functions.math.euclidean_pairwise_distances import euclidean_pairwise_distances
 
 
 class NpairLoss:
@@ -11,7 +11,6 @@ class NpairLoss:
 
     def __init__(
         self,
-        model,
         metric_type='dot',
         loss_type='hinge',
         margin=187.0,
@@ -21,7 +20,6 @@ class NpairLoss:
         """
 
         Args:
-            model (chainer.Chain): A model to which is added this loss.
             metric_type (str, optional): Defaults to 'dot'.
                 `dot`, `cosine`, or `euclidean`.
             loss_type (str, optional): [description]. Defaults to 'hinge'.
@@ -32,7 +30,6 @@ class NpairLoss:
                 and the loss whose anchor is from the domain V.
             cache (bool, optional): [description]. Defaults to False.
         """
-        self.model = model
         self.metric_type = metric_type
         self.l2_normalize = metric_type == 'cosine'
         self.loss_type = loss_type
@@ -85,7 +82,7 @@ class NpairLoss:
 
         if self.bidirectional:
             B_u, B_v = metrics.shape
-            if B_u == B_v:
+            if B_u != B_v:
                 raise ValueError(
                     'B_u and B_v must be the same when bidirectional.')
             xp = cuda.get_array_module(metrics)
@@ -97,7 +94,7 @@ class NpairLoss:
         # for report
         if self.cache:
             self.metrics = metrics
-            self.lebels = labels
+            self.labels = labels
             self.u = u
             self.v = v
 
@@ -218,7 +215,10 @@ class NpairLoss:
         pos_neg_u = pos_neg_u.data
         pos_neg_v = pos_neg_v.data
 
-        return anc_pos, anc_neg, pos_neg_u, pos_neg_v
+        return dict(anc_pos=anc_pos,
+                    anc_neg=anc_neg,
+                    pos_neg_u=pos_neg_u,
+                    pos_neg_v=pos_neg_v)
 
     @property
     def norms(self):
@@ -236,7 +236,8 @@ class NpairLoss:
             norm_u = F.mean(F.sqrt(F.batch_l2_norm_squared(u))).data
             norm_v = F.mean(F.sqrt(F.batch_l2_norm_squared(v))).data
 
-        return norm_u, norm_v
+        return dict(norm_u=norm_u.data,
+                    norm_v=norm_v.data)
 
     def clear_cache(self):
         # for memory efficency
