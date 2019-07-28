@@ -13,14 +13,9 @@ class NpairLoss:
         self,
         model,
         metric_type='dot',
-        # euclidean
-        # dot (inner product)
-        # dot_l2reg (l2 regularized)
         loss_type='hinge',
         margin=187.0,
         bidirectional=False,
-        is_first_iter=True,
-        init_loss_ratio=None,
         cache=False,
     ):
         """
@@ -35,8 +30,6 @@ class NpairLoss:
                 If this is `True`, use both losses
                 e.g., use the loss whose anchor is from the domain U,
                 and the loss whose anchor is from the domain V.
-            is_first_iter (bool, optional): [description]. Defaults to True.
-            init_loss_ratio ([type], optional): [description]. Defaults to None.
             cache (bool, optional): [description]. Defaults to False.
         """
         self.model = model
@@ -163,6 +156,7 @@ class NpairLoss:
                     metrics.T, labels, metric_type, margin)
             elif loss_type == 'softmax':
                 loss += F.softmax_cross_entropy(metrics.T, labels)
+            loss /= 2
 
         return loss
 
@@ -195,7 +189,6 @@ class NpairLoss:
                 # multiply zero to diagonal elements of similarities (sim_ap)
                 mask = xp.ones_like(metrics) - xp.eye(B_u, dtype=metrics.dtype)
             else:
-                # arange_B_u: [0, 1, ..., B_u-1]
                 # metrics between anchor and positive samples
                 metric_ap = metrics[xp.arange(B_u), labels].reshape(-1, 1)
                 # metric_ap: (B_u, 1)
@@ -231,7 +224,8 @@ class NpairLoss:
 
         return anc_pos, anc_neg, pos_neg_u, pos_neg_v
 
-    def get_norms(self):
+    @property
+    def norms(self):
         """
         Returns:
             norm_u (xp.array (1, ))
@@ -243,52 +237,14 @@ class NpairLoss:
         with using_config('train', False),\
                 using_config('enable_backprop', False):
 
-            norm_u = F.mean(F.sqrt(F.batch_l2_norm_squared(u)))
-            norm_v = F.mean(F.sqrt(F.batch_l2_norm_squared(v)))
+            norm_u = F.mean(F.sqrt(F.batch_l2_norm_squared(u))).data
+            norm_v = F.mean(F.sqrt(F.batch_l2_norm_squared(v))).data
 
-        return dict(norm_u=norm_u.data,
-                    norm_v=norm_v.data)
+        return norm_u, norm_v
 
-    def delete_cache(self):
+    def clear_cache(self):
         # for memory efficency
         del self.u
         del self.v
         del self.metrics
-
-
-def lossfun_softmax_bidir(metrics):
-    """
-    Softmax Cross Entropy
-    `metrics` must be **similarity** matrix.
-
-    Args:
-        metrics (chainer.Variable or xp.ndarray:(b, b))
-        metric_type: (str) 'euclidean', 'cosine', 'dot', 'dot_l2reg'
-        margin (float)
-    """
-    xp = cuda.get_array_module(metrics)
-
-    B = len(metrics.data)
-    cost_u = F.softmax_cross_entropy(metrics, xp.arange(B))
-    cost_v = F.softmax_cross_entropy(metrics.T, xp.arange(B))
-    loss_softmax = (cost_u + cost_v) / 2
-    return loss_softmax
-
-
-def lossfun_l2(u, v):
-    """
-    This makes the norm of u/shop close to 1.
-    Use this instead of l2 normalization.
-    If you use this, you must share network.
-
-    Args:
-        u (chainer.Variable or xp.ndarray:(b, emb))
-        v (chainer.Variable or xp.ndarray:(b, emb))
-    """
-    B = len(u)
-    # use relu and marign 1
-    # to avoid for norms being less than 1
-    loss_l2 = F.relu(-1 +
-                     sum(F.batch_l2_norm_squared(u) +
-                         F.batch_l2_norm_squared(v)) / (2.0 * B))
-    return loss_l2
+        del self.labels
