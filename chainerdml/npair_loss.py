@@ -179,38 +179,33 @@ class NpairLoss:
         labels = self.labels
 
         xp = cuda.get_array_module(metrics)
+        B_u, B_v = metrics.shape
 
         with using_config('train', False),\
                 using_config('enable_backprop', False):
 
-            B_u, B_v = metrics.shape
-            if self.bidirectional:
-                anc_pos = F.mean(F.diagonal(metrics))
+            # metrics between anchor and positive samples
+            metric_ap = metrics[xp.arange(B_u), labels].reshape(-1, 1)
+            # metric_ap: (B_u, 1)
+            anc_pos = F.mean(metric_ap)
 
-                # multiply zero to diagonal elements of similarities (sim_ap)
-                mask = xp.ones_like(metrics) - xp.eye(B_u, dtype=metrics.dtype)
-            else:
-                # metrics between anchor and positive samples
-                metric_ap = metrics[xp.arange(B_u), labels].reshape(-1, 1)
-                # metric_ap: (B_u, 1)
-                anc_pos = F.mean(metric_ap)
-
-                # for multiplying zero to metric_ap
-                mask = xp.ones_like(metrics)
-                mask[xp.arange(B_u), labels] = 0
-                # mask: (B_u, B_v)
-
-            anc_neg = F.sum(mask * metrics) / (B_u * (B_v - 1))
+            # to get anc_neg (for multiplying zero to metric_ap)
+            mask = xp.ones_like(metrics)
+            mask[xp.arange(B_u), labels] = 0
+            # mask: (B_u, B_v)
+            anc_neg = F.sum(mask * metrics) / mask.sum()
 
             metrics_u = self.calc_metric_matrix(u, u)
             mask_u = xp.ones_like(metrics_u)
             mask_u[xp.arange(B_u), xp.arange(B_u)] = 0
-            pos_neg_u = F.sum(mask_u * metrics_u) / (B_u * (B_u - 1))
+            # mask: (B_u, B_u)
+            pos_neg_u = F.sum(mask_u * metrics_u) / mask_u.sum()
 
             metrics_v = self.calc_metric_matrix(v, v)
             mask_v = xp.ones_like(metrics_v)
             mask_v[xp.arange(B_v), xp.arange(B_v)] = 0
-            pos_neg_v = F.sum(mask_v * metrics_v) / (B_v * (B_v - 1))
+            # mask: (B_v, B_v)
+            pos_neg_v = F.sum(mask_v * metrics_v) / mask_v.sum()
 
             if self.metric_type == 'euclidean':
                 anc_pos = F.sqrt(anc_pos)
@@ -218,10 +213,10 @@ class NpairLoss:
                 pos_neg_u = F.sqrt(pos_neg_u)
                 pos_neg_v = F.sqrt(pos_neg_v)
 
-            anc_pos = anc_pos.data
-            anc_neg = anc_neg.data
-            pos_neg_u = pos_neg_u.data
-            pos_neg_v = pos_neg_v.data
+        anc_pos = anc_pos.data
+        anc_neg = anc_neg.data
+        pos_neg_u = pos_neg_u.data
+        pos_neg_v = pos_neg_v.data
 
         return anc_pos, anc_neg, pos_neg_u, pos_neg_v
 
