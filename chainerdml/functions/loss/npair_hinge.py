@@ -1,5 +1,6 @@
 import chainer.functions as F
 from chainer import cuda
+from chainerdml.constants import SIMILARITIES, DISTANCES
 
 
 def npair_hinge(metrics, labels, metric_type, margin):
@@ -29,17 +30,17 @@ def npair_hinge(metrics, labels, metric_type, margin):
     mask[arange_B, labels] = 0
     # mask: (B, N)
 
-    if metric_type == 'euclidean':
+    if metric_type in DISTANCES:
         d_neg = metrics
         d_pos = metric_ap_hstack
 
-        loss = F.mean(mask * F.relu(- d_neg + d_pos + margin))
-    elif metric_type == 'euclidean':
+        loss = F.mean(mask * F.relu(-d_neg + d_pos + margin))
+    elif metric_type in SIMILARITIES:
         s_neg = metrics
         s_pos = metric_ap_hstack
 
         loss = F.mean(mask * F.relu(s_neg - s_pos + margin))
     else:
-        ValueError('Unknown metric_type, {}'.format(metric_type))
+        ValueError("Unknown metric_type, {}".format(metric_type))
 
     return loss

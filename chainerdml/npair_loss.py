@@ -2,17 +2,17 @@ import chainer.functions as F
 from chainer import cuda
 from chainer import using_config
 from chainerdml.functions.loss.npair_hinge import npair_hinge
-from chainerdml.functions.math.euclidean_pairwise_distances import euclidean_pairwise_distances
+from chainerdml.functions.math.euclidean_pairwise_distances import (
+    euclidean_pairwise_distances,
+)
+from chainerdml.constants import METRIC_TYPES, LOSS_TYPES
 
 
 class NpairLoss:
-    _valid_metric_types = ['dot', 'cosine', 'euclidean']
-    _valid_loss_types = ['hinge', 'softmax']
-
     def __init__(
         self,
-        metric_type='dot',
-        loss_type='hinge',
+        metric_type="dot",
+        loss_type="hinge",
         margin=187.0,
         bidirectional=False,
         cache=False,
@@ -31,7 +31,7 @@ class NpairLoss:
             cache (bool, optional): [description]. Defaults to False.
         """
         self.metric_type = metric_type
-        self.l2_normalize = metric_type == 'cosine'
+        self.l2_normalize = metric_type == "cosine"
         self.loss_type = loss_type
         self.margin = margin
         self.bidirectional = bidirectional
@@ -42,16 +42,20 @@ class NpairLoss:
     def _verify(self):
         checklist = [
             (
-                self.metric_type not in self._valid_metric_types,
+                self.metric_type not in METRIC_TYPES,
                 ValueError(
-                    '`metric_type` must be selected from {}.'.format(
-                        ', '.join(self._valid_metric_types)))
+                    "`metric_type` must be selected from {}.".format(
+                        ", ".join(METRIC_TYPES)
+                    )
+                ),
             ),
             (
-                self.loss_type not in self._valid_loss_types,
+                self.loss_type not in LOSS_TYPES,
                 ValueError(
-                    '`loss_type` must be selected from {}.'.format(
-                        ', '.join(self._valid_loss_types)))
+                    "`loss_type` must be selected from {}.".format(
+                        ", ".join(LOSS_TYPES)
+                    )
+                ),
             ),
         ]
 
@@ -84,7 +88,8 @@ class NpairLoss:
             B_u, B_v = metrics.shape
             if B_u != B_v:
                 raise ValueError(
-                    'B_u and B_v must be the same when bidirectional.')
+                    "B_u and B_v must be the same when bidirectional."
+                )
             xp = cuda.get_array_module(metrics)
             labels = xp.arange(B_u)
             # labels: (B_u, )
@@ -110,7 +115,7 @@ class NpairLoss:
         Return:
             metrics(Variable (b, b)): metric matrix
         """
-        if self.metric_type == 'euclidean':
+        if self.metric_type == "euclidean":
             if not self.bidirectional:
                 raise NotImplementedError
 
@@ -137,22 +142,21 @@ class NpairLoss:
         margin = self.margin
 
         # anchor is u.
-        if loss_type == 'hinge':
-            loss = npair_hinge(
-                metrics, labels, metric_type, margin)
-        elif loss_type == 'softmax':
-            if metric_type not in ['dot', 'cosine']:
+        if loss_type == "hinge":
+            loss = npair_hinge(metrics, labels, metric_type, margin)
+        elif loss_type == "softmax":
+            if metric_type not in ["dot", "cosine"]:
                 raise ValueError(
-                    'metric_type must be a kind of similarties\
-                    when loss_type is `softmax`')
+                    "metric_type must be a kind of similarties\
+                    when loss_type is `softmax`"
+                )
             loss = F.softmax_cross_entropy(metrics, labels)
 
         # anchor is v.
         if self.bidirectional:
-            if loss_type == 'hinge':
-                loss += npair_hinge(
-                    metrics.T, labels, metric_type, margin)
-            elif loss_type == 'softmax':
+            if loss_type == "hinge":
+                loss += npair_hinge(metrics.T, labels, metric_type, margin)
+            elif loss_type == "softmax":
                 loss += F.softmax_cross_entropy(metrics.T, labels)
             loss /= 2
 
@@ -178,8 +182,9 @@ class NpairLoss:
         xp = cuda.get_array_module(metrics)
         B_u, B_v = metrics.shape
 
-        with using_config('train', False),\
-                using_config('enable_backprop', False):
+        with using_config("train", False), using_config(
+            "enable_backprop", False
+        ):
 
             # metrics between anchor and positive samples
             metric_ap = metrics[xp.arange(B_u), labels].reshape(-1, 1)
@@ -204,7 +209,7 @@ class NpairLoss:
             # mask: (B_v, B_v)
             pos_neg_v = F.sum(mask_v * metrics_v) / mask_v.sum()
 
-            if self.metric_type == 'euclidean':
+            if self.metric_type == "euclidean":
                 anc_pos = F.sqrt(anc_pos)
                 anc_neg = F.sqrt(anc_neg)
                 pos_neg_u = F.sqrt(pos_neg_u)
@@ -215,10 +220,12 @@ class NpairLoss:
         pos_neg_u = pos_neg_u.data
         pos_neg_v = pos_neg_v.data
 
-        return dict(anc_pos=anc_pos,
-                    anc_neg=anc_neg,
-                    pos_neg_u=pos_neg_u,
-                    pos_neg_v=pos_neg_v)
+        return dict(
+            anc_pos=anc_pos,
+            anc_neg=anc_neg,
+            pos_neg_u=pos_neg_u,
+            pos_neg_v=pos_neg_v,
+        )
 
     @property
     def norms(self):
@@ -230,14 +237,14 @@ class NpairLoss:
         u = self.u
         v = self.v
         # x_: (b, emb)
-        with using_config('train', False),\
-                using_config('enable_backprop', False):
+        with using_config("train", False), using_config(
+            "enable_backprop", False
+        ):
 
             norm_u = F.mean(F.sqrt(F.batch_l2_norm_squared(u))).data
             norm_v = F.mean(F.sqrt(F.batch_l2_norm_squared(v))).data
 
-        return dict(norm_u=norm_u.data,
-                    norm_v=norm_v.data)
+        return dict(norm_u=norm_u.data, norm_v=norm_v.data)
 
     def clear_cache(self):
         # for memory efficency
