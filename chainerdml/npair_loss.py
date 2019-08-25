@@ -9,6 +9,9 @@ from chainerdml.constants import METRIC_TYPES, LOSS_TYPES
 
 
 class NpairLoss:
+    metric_names_apn = ["anc_pos", "anc_neg", "pos_neg_u", "pos_neg_v"]
+    metric_names_norms = ["norm_u", "norm_v"]
+
     def __init__(
         self,
         metric_type="dot",
@@ -221,10 +224,9 @@ class NpairLoss:
         pos_neg_v = pos_neg_v.data
 
         return dict(
-            anc_pos=anc_pos,
-            anc_neg=anc_neg,
-            pos_neg_u=pos_neg_u,
-            pos_neg_v=pos_neg_v,
+            zip(
+                self.metric_names_apn, [anc_pos, anc_neg, pos_neg_u, pos_neg_v]
+            )
         )
 
     @property
@@ -244,7 +246,7 @@ class NpairLoss:
             norm_u = F.mean(F.sqrt(F.batch_l2_norm_squared(u))).data
             norm_v = F.mean(F.sqrt(F.batch_l2_norm_squared(v))).data
 
-        return dict(norm_u=norm_u.data, norm_v=norm_v.data)
+        return dict(zip(self.metric_names_norms, [norm_u, norm_v]))
 
     def clear_cache(self):
         # for memory efficency
